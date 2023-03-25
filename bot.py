@@ -1,17 +1,15 @@
 import json
 import logging
 import os
-from functools import partial
-
+import re
 import redis
-import random
 
+from functools import partial
 from dotenv import load_dotenv
-from textwrap import dedent
 from main import fetch_random_questions
 
-from telegram import ReplyKeyboardMarkup
-from telegram import Update, ForceReply
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, \
     CallbackContext, ConversationHandler
 
@@ -23,20 +21,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-QUESTION = 1
-ANSWER = 2
+QUESTIONS, ANSWERS = 1, 2
 
 
 def start(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /start is issued."""
 
-    user = update.effective_user
-    greetings = dedent(fr'''
-                            Приветствую {user.mention_markdown_v2()}\!
-                            Я бот задающий интересные вопросы
-                            Выберите дальнейшее действие\.''')
+    greetings = f'Приветствую! \nЯ бот задающий ' \
+                f'интересные вопросы. \nНу что поиграем? 🎲.'
 
-    message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
+    message_keyboard = [["Новый вопрос ❔"],
                         ['Мой счет ✍️']]
 
     markup = ReplyKeyboardMarkup(
@@ -44,26 +38,25 @@ def start(update: Update, context: CallbackContext) -> None:
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_markdown_v2(text=greetings,
-                                     reply_markup=markup)
-    return QUESTION
+    context.user_data["score"] = 0
+    update.message.reply_text(text=greetings, reply_markup=markup)
+    return QUESTIONS
 
 
 def ask_question(update: Update, context: CallbackContext, redis_client):
-    print(redis_client.get('a'))
     quiz_question = fetch_random_questions()
-    question = quiz_question[0]
-    answer = quiz_question[1].split('\n')[1].split('.')[0]
+    question = re.sub(r'Вопрос \d+:\s+', '', quiz_question[0])
+    answer = re.sub(r'Ответ:\s+', '', quiz_question[1])
     print(answer)
     chat_id = update.effective_message.chat_id
 
     redis_client.set(f'{chat_id}_question', json.dumps(question))
     redis_client.set(f'{chat_id}_answer', json.dumps(answer))
-    # redis_client.set(f'{chat_id}_score', json.dumps(score))
 
     question = json.loads(redis_client.get(f'{chat_id}_question'))
+
     print(f'question--->{question}')
-    greetings = f'Внимание вопрос: \n{question}'
+    greetings = f'Внимание вопрос: \n\n{question}'
 
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
@@ -73,17 +66,20 @@ def ask_question(update: Update, context: CallbackContext, redis_client):
         one_time_keyboard=True
     )
     update.message.reply_text(greetings, reply_markup=markup)
-    return QUESTION
+    return ANSWERS
+
 
 def check_answer(update: Update, context: CallbackContext, redis_client):
     chat_id = update.effective_message.chat_id
-    answer = update.effective_message.text
-    answerr = json.loads(redis_client.get(f'{chat_id}_answer'))
-    if answer == answerr:
-        greetings = f'Вы ответили правильно!'
+    user_answer = update.effective_message.text.lower()
+    answer = json.loads(redis_client.get(f'{chat_id}_answer')).split('.')[0].lower()
+    if user_answer == answer:
+        context.user_data["score"] += 1
+        total_score = json.loads(redis_client.get(f'{chat_id}_score'))
+        redis_client.set(f'{chat_id}_score', total_score + 1)
+        greetings = f'Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
     else:
-        greetings = f'Увы, ответ неверный. \nМожете попробовать еще раз или ' \
-                    f'сдаться'
+        greetings = f'Неправильно… Попробуешь ещё раз?'
 
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
@@ -93,19 +89,42 @@ def check_answer(update: Update, context: CallbackContext, redis_client):
         one_time_keyboard=True
     )
     update.message.reply_text(greetings, reply_markup=markup)
-    return QUESTION
+    return ANSWERS
 
 
-def cancel(update: Update, context: CallbackContext, redis_client):
-    greetings = "Игра закончилась, ваш счет 121 балл"
+def show_answer(update: Update, context: CallbackContext, redis_client):
+    score = context.user_data["score"]
+    chat_id = update.effective_message.chat_id
+    answer = json.loads(redis_client.get(f'{chat_id}_answer'))
+    greetings = f"Правильный ответ \n\n{answer}, \n\nВаш счет текущей партии" \
+                f" {score} балл(а/ов)"
+    update.message.reply_text(greetings)
+    ask_question(update, context, redis_client)
+
+
+def check_score(update: Update, context: CallbackContext, redis_client):
+    chat_id = update.effective_message.chat_id
+    score = context.user_data["score"]
+    total_score = json.loads(redis_client.get(f'{chat_id}_score'))
+    greetings = f"Ваш счет текущей партии {score} балл(а/ов) \n\n" \
+                f"Ваш общий итоговый счет {total_score} балл(а/ов)"
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
     markup = ReplyKeyboardMarkup(
-        message_keyboard,
-        resize_keyboard=True,
-        one_time_keyboard=True
+        message_keyboard, resize_keyboard=True, one_time_keyboard=True
     )
     update.message.reply_text(greetings, reply_markup=markup)
+    return QUESTIONS
+
+
+def cancel(update: Update, context: CallbackContext):
+    user = update.message.from_user
+    logger.info("User %s canceled the conversation.", user.first_name)
+    update.message.reply_text(
+        'Прощай! Я надеюсь мы встретимся снова в другой раз.',
+        reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
 
 
 def main() -> None:
@@ -122,15 +141,22 @@ def main() -> None:
 
         question = partial(ask_question, redis_client=redis_client)
         answer = partial(check_answer, redis_client=redis_client)
+        fail = partial(show_answer, redis_client=redis_client)
+        score = partial(check_score, redis_client=redis_client)
 
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler("start", start)],
             states={
-                QUESTION: [MessageHandler(Filters.text("Новый вопрос ❔"), question),
-                           MessageHandler(Filters.text & ~Filters.command, answer)],
-                ANSWER: [
+                QUESTIONS: [
                     MessageHandler(Filters.text("Новый вопрос ❔"), question),
-                    MessageHandler(Filters.text & ~Filters.command, answer)],
+                    MessageHandler(Filters.text("Мой счет ✍️"), score),
+                ],
+                ANSWERS: [
+                    MessageHandler(Filters.text("Новый вопрос ❔"), question),
+                    MessageHandler(Filters.text("Сдаться ❌"), fail),
+                    MessageHandler(Filters.text("Мой счет ✍️"), score),
+                    MessageHandler(Filters.text & ~Filters.command, answer)
+                ],
             },
             fallbacks=[CommandHandler('cancel', cancel)],
         )
