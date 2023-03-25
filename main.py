@@ -52,9 +52,13 @@ def fetch_random_questions():
         print(f'quiz_ques_count ->> {len(shuffle_questions)}')
         five_random_questions = shuffle_questions.popitem()
         print(f'quiz_ques ->> {five_random_questions}')
-        questions = five_random_questions[0].split('\n   ')[1:]
-        answers = five_random_questions[1].split('\n   ')[1:]
-        for key, random_question in enumerate(questions):
-            random_questions[random_question] = answers[key]
-
+        if '\n   ' in five_random_questions:
+            questions = five_random_questions[0].split('\n   ')[1:]
+            answers = five_random_questions[1].split('\n   ')[1:]
+            for key, random_question in enumerate(questions):
+                random_questions[random_question] = answers[key]
+        else:
+            question = five_random_questions[0]
+            answer = five_random_questions[1]
+            random_questions[question] = answer
     return random_questions.popitem()
