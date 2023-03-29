@@ -5,7 +5,9 @@ import re
 import redis
 
 from functools import partial
+from time import sleep
 from dotenv import load_dotenv
+from logs_handler import TelegramLogsHandler
 from main import fetch_random_questions
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -14,12 +16,8 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, \
     CallbackContext, ConversationHandler
 
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
-)
-
 logger = logging.getLogger(__name__)
-
+exception_logger = logging.getLogger('exception_logger')
 
 QUESTIONS, ANSWERS = 1, 2
 
@@ -47,16 +45,15 @@ def ask_question(update: Update, context: CallbackContext, redis_client):
     quiz_question = fetch_random_questions()
     question = re.sub(r'Вопрос \d+:\s+', '', quiz_question[0])
     answer = re.sub(r'Ответ:\s+', '', quiz_question[1])
-    print(answer)
+
     chat_id = update.effective_message.chat_id
 
     redis_client.set(f'{chat_id}_question', json.dumps(question))
     redis_client.set(f'{chat_id}_answer', json.dumps(answer))
 
-    question = json.loads(redis_client.get(f'{chat_id}_question'))
+    logger.info(f'question--->{question}, \nanswer--->{answer}')
 
-    print(f'question--->{question}')
-    greetings = f'Внимание вопрос: \n\n{question}'
+    bot_answer = f'Внимание вопрос: \n\n{question}'
 
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
@@ -65,7 +62,7 @@ def ask_question(update: Update, context: CallbackContext, redis_client):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(greetings, reply_markup=markup)
+    update.message.reply_text(bot_answer, reply_markup=markup)
     return ANSWERS
 
 
@@ -77,9 +74,9 @@ def check_answer(update: Update, context: CallbackContext, redis_client):
         context.user_data["score"] += 1
         total_score = json.loads(redis_client.get(f'{chat_id}_score'))
         redis_client.set(f'{chat_id}_score', total_score + 1)
-        greetings = f'Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
+        bot_answer = f'Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
     else:
-        greetings = f'Неправильно… Попробуешь ещё раз?'
+        bot_answer = f'Неправильно… Попробуешь ещё раз?'
 
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
@@ -88,7 +85,7 @@ def check_answer(update: Update, context: CallbackContext, redis_client):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(greetings, reply_markup=markup)
+    update.message.reply_text(bot_answer, reply_markup=markup)
     return ANSWERS
 
 
@@ -96,9 +93,9 @@ def show_answer(update: Update, context: CallbackContext, redis_client):
     score = context.user_data["score"]
     chat_id = update.effective_message.chat_id
     answer = json.loads(redis_client.get(f'{chat_id}_answer'))
-    greetings = f"Правильный ответ \n\n{answer}, \n\nВаш счет текущей партии" \
+    bot_answer = f"Правильный ответ \n\n{answer}, \n\nВаш счет текущей партии" \
                 f" {score} балл(а/ов)"
-    update.message.reply_text(greetings)
+    update.message.reply_text(bot_answer)
     ask_question(update, context, redis_client)
 
 
@@ -106,14 +103,14 @@ def check_score(update: Update, context: CallbackContext, redis_client):
     chat_id = update.effective_message.chat_id
     score = context.user_data["score"]
     total_score = json.loads(redis_client.get(f'{chat_id}_score'))
-    greetings = f"Ваш счет текущей партии {score} балл(а/ов) \n\n" \
+    bot_answer = f"Ваш счет текущей партии {score} балл(а/ов) \n\n" \
                 f"Ваш общий итоговый счет {total_score} балл(а/ов)"
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
     markup = ReplyKeyboardMarkup(
         message_keyboard, resize_keyboard=True, one_time_keyboard=True
     )
-    update.message.reply_text(greetings, reply_markup=markup)
+    update.message.reply_text(bot_answer, reply_markup=markup)
     return QUESTIONS
 
 
@@ -130,7 +127,16 @@ def cancel(update: Update, context: CallbackContext):
 def main() -> None:
     """Start the bot."""
     load_dotenv()
-    updater = Updater(os.getenv("TG_API_BOT"))
+    TIMEOUT = 120
+    chat_id = os.getenv('TG_CHAT_ID')
+    api_tg_token = os.getenv("TG_API_BOT")
+
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - '
+                               '%(message)s', datefmt='%d-%m-%Y %I:%M:%S %p',
+                        level=logging.INFO)
+
+    exception_logger.setLevel(logging.ERROR)
+    exception_logger.addHandler(TelegramLogsHandler(api_tg_token, chat_id))
 
     with redis.Redis(
             host=os.getenv("REDIS_HOST"),
@@ -144,27 +150,33 @@ def main() -> None:
         fail = partial(show_answer, redis_client=redis_client)
         score = partial(check_score, redis_client=redis_client)
 
-        conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("start", start)],
-            states={
-                QUESTIONS: [
-                    MessageHandler(Filters.text("Новый вопрос ❔"), question),
-                    MessageHandler(Filters.text("Мой счет ✍️"), score),
-                ],
-                ANSWERS: [
-                    MessageHandler(Filters.text("Новый вопрос ❔"), question),
-                    MessageHandler(Filters.text("Сдаться ❌"), fail),
-                    MessageHandler(Filters.text("Мой счет ✍️"), score),
-                    MessageHandler(Filters.text & ~Filters.command, answer)
-                ],
-            },
-            fallbacks=[CommandHandler('cancel', cancel)],
-        )
+        while True:
+            try:
+                updater = Updater(api_tg_token)
+                conv_handler = ConversationHandler(
+                    entry_points=[CommandHandler("start", start)],
+                    states={
+                        QUESTIONS: [
+                            MessageHandler(Filters.text("Новый вопрос ❔"), question),
+                            MessageHandler(Filters.text("Мой счет ✍️"), score),
+                        ],
+                        ANSWERS: [
+                            MessageHandler(Filters.text("Новый вопрос ❔"), question),
+                            MessageHandler(Filters.text("Сдаться ❌"), fail),
+                            MessageHandler(Filters.text("Мой счет ✍️"), score),
+                            MessageHandler(Filters.text & ~Filters.command, answer)
+                        ],
+                    },
+                    fallbacks=[CommandHandler('cancel', cancel)],
+                )
 
-        dispatcher = updater.dispatcher
-        dispatcher.add_handler(conv_handler)
-        updater.start_polling()
-        updater.idle()
+                dispatcher = updater.dispatcher
+                dispatcher.add_handler(conv_handler)
+                updater.start_polling()
+                updater.idle()
+            except Exception:
+                exception_logger.exception("Бот упал с ошибкой")
+                sleep(TIMEOUT)
 
 
 if __name__ == '__main__':
