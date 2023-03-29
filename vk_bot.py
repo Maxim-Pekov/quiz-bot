@@ -1,14 +1,15 @@
-import random, os
-import redis
-import json
+import os
 import re
+import json
+import redis
+import random
 import logging
 
-from fetch_questions import fetch_random_questions
-from dotenv import load_dotenv
-from time import sleep
 import vk_api as vk
+from time import sleep
+from dotenv import load_dotenv
 from logs_handler import TelegramLogsHandler
+from fetch_questions import fetch_random_questions
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 
@@ -21,8 +22,8 @@ def start(event, vk_api, keyboard):
     """Send a  greeting message."""
     logger.info(f'Пользователь {event.user_id} запустил бота.')
 
-    greetings = f'Приветствую! \nЯ бот задающий ' \
-                f'интересные вопросы. \nНу что поиграем? 🎲.'
+    greetings = 'Приветствую! \nЯ бот задающий ' \
+                'интересные вопросы. \nНу что поиграем? 🎲.'
 
     vk_api.messages.send(
         user_id=event.user_id,
@@ -58,18 +59,19 @@ def ask_question(event, vk_api, keyboard, redis_client):
 
 def check_answer(event, vk_api, keyboard, redis_client):
     user_id = event.user_id
-    answer = json.loads(redis_client.get(f'{user_id}_answer')).split('.')[0].lower()
+    answer = json.loads(redis_client.get(f'{chat_id}_answer')).split('.')[0]
+    lower_answer = answer.lower()
 
-    if event.text.lower() == answer:
+    if event.text.lower() == lower_answer:
         try:
             total_score = json.loads(redis_client.get(f'{user_id}_score'))
         except TypeError:
             total_score = 0
         redis_client.set(f'{user_id}_score', total_score + 1)
-        bot_answer = f'Правильно! Поздравляю! Для следующего вопроса нажми ' \
-                  f'«Новый вопрос»'
+        bot_answer = 'Правильно! Поздравляю! Для следующего вопроса нажми ' \
+                     '«Новый вопрос»'
     else:
-        bot_answer = f'Неправильно… Попробуешь ещё раз?'
+        bot_answer = 'Неправильно… Попробуешь ещё раз?'
 
     vk_api.messages.send(
         user_id=event.user_id,

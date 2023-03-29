@@ -25,8 +25,8 @@ QUESTIONS, ANSWERS = 1, 2
 def start(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /start is issued."""
 
-    greetings = f'Приветствую! \nЯ бот задающий ' \
-                f'интересные вопросы. \nНу что поиграем? 🎲.'
+    greetings = 'Приветствую! \nЯ бот задающий интересные вопросы. ' \
+                '\nНу что поиграем? 🎲.'
 
     message_keyboard = [["Новый вопрос ❔"],
                         ['Мой счет ✍️']]
@@ -71,14 +71,16 @@ def ask_question(update: Update, context: CallbackContext, redis_client):
 def check_answer(update: Update, context: CallbackContext, redis_client):
     chat_id = update.effective_message.chat_id
     user_answer = update.effective_message.text.lower()
-    answer = json.loads(redis_client.get(f'{chat_id}_answer')).split('.')[0].lower()
-    if user_answer == answer:
+    answer = json.loads(redis_client.get(f'{chat_id}_answer')).split('.')[0]
+    lower_answer = answer.lower()
+    if user_answer == lower_answer:
         context.user_data["score"] += 1
         total_score = json.loads(redis_client.get(f'{chat_id}_score'))
         redis_client.set(f'{chat_id}_score', total_score + 1)
-        bot_answer = f'Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»'
+        bot_answer = 'Правильно! Поздравляю! ' \
+                     'Для следующего вопроса нажми «Новый вопрос»'
     else:
-        bot_answer = f'Неправильно… Попробуешь ещё раз?'
+        bot_answer = 'Неправильно… Попробуешь ещё раз?'
 
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
@@ -95,8 +97,8 @@ def show_answer(update: Update, context: CallbackContext, redis_client):
     score = context.user_data["score"]
     chat_id = update.effective_message.chat_id
     answer = json.loads(redis_client.get(f'{chat_id}_answer'))
-    bot_answer = f"Правильный ответ \n\n{answer}, \n\nВаш счет текущей партии" \
-                f" {score} балл(а/ов)"
+    bot_answer = f'Правильный ответ \n\n{answer},\n\nВаш счет текущей партии' \
+                 f' {score} балл(а/ов)'
     update.message.reply_text(bot_answer)
     ask_question(update, context, redis_client)
 
@@ -106,7 +108,7 @@ def check_score(update: Update, context: CallbackContext, redis_client):
     score = context.user_data["score"]
     total_score = json.loads(redis_client.get(f'{chat_id}_score'))
     bot_answer = f"Ваш счет текущей партии {score} балл(а/ов) \n\n" \
-                f"Ваш общий итоговый счет {total_score} балл(а/ов)"
+                 f"Ваш общий итоговый счет {total_score} балл(а/ов)"
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
     markup = ReplyKeyboardMarkup(
@@ -159,14 +161,20 @@ def main() -> None:
                     entry_points=[CommandHandler("start", start)],
                     states={
                         QUESTIONS: [
-                            MessageHandler(Filters.text("Новый вопрос ❔"), question),
+                            MessageHandler(
+                                Filters.text("Новый вопрос ❔"), question
+                            ),
                             MessageHandler(Filters.text("Мой счет ✍️"), score),
                         ],
                         ANSWERS: [
-                            MessageHandler(Filters.text("Новый вопрос ❔"), question),
+                            MessageHandler(
+                                Filters.text("Новый вопрос ❔"), question
+                            ),
                             MessageHandler(Filters.text("Сдаться ❌"), fail),
                             MessageHandler(Filters.text("Мой счет ✍️"), score),
-                            MessageHandler(Filters.text & ~Filters.command, answer)
+                            MessageHandler(
+                                Filters.text & ~Filters.command, answer
+                            )
                         ],
                     },
                     fallbacks=[CommandHandler('cancel', cancel)],
