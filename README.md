@@ -59,9 +59,15 @@ source ./.venv/bin/activate    # for Linux
 pip install -r devman_bot/requirements.txt
 ```
 
-6. Создайте файл с названием `.env`
+6. Скачайте вопросы для викторины по ссылке 
+[вопросы для викторины](https://dvmn.org/media/modules_dist/quiz-questions.zip)
+или создайте свои вопросы.
 
-7. Запишите в данном файле: 
+7. Положите папку с файлами содержащую вопросы в корень проекта.
+
+8. Создайте файл с названием `.env`
+
+9. Запишите в данном файле: 
    ваш API токен с сайта ВК, 
    телеграмм токен вашего бота, 
    TG_CHAT_ID - это id чата телеграмма куда присылать ошибки уровня Error,
@@ -79,6 +85,8 @@ REDIS_HOST=redis-18156.c12.us-east-1-5.ec2.cloud.redislabs.com
 REDIS_PORT=18882
 QUESTIONS_DIR=quiz-questions
 ```
+
+
 
 ## About me
 
