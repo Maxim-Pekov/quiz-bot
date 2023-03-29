@@ -8,7 +8,7 @@ from functools import partial
 from time import sleep
 from dotenv import load_dotenv
 from logs_handler import TelegramLogsHandler
-from main import fetch_random_questions
+from fetch_questions import fetch_random_questions
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram import Update
@@ -42,7 +42,9 @@ def start(update: Update, context: CallbackContext) -> None:
 
 
 def ask_question(update: Update, context: CallbackContext, redis_client):
-    quiz_question = fetch_random_questions()
+    questions_dir = os.getenv('QUESTIONS_DIR')
+    quiz_question = fetch_random_questions(questions_dir)
+
     question = re.sub(r'Вопрос \d+:\s+', '', quiz_question[0])
     answer = re.sub(r'Ответ:\s+', '', quiz_question[1])
 

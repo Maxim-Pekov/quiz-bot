@@ -4,7 +4,7 @@ import json
 import re
 import logging
 
-from main import fetch_random_questions
+from fetch_questions import fetch_random_questions
 from dotenv import load_dotenv
 from time import sleep
 import vk_api as vk

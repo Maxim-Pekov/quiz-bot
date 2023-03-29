@@ -1,9 +1,15 @@
 import os
 import random
+import logging
 from collections import OrderedDict
 
 
 questions_path = []
+quiz_questions = OrderedDict()
+shuffle_questions = {}
+random_questions = {}
+
+logger = logging.getLogger(__name__)
 
 
 def shuffle_dict(dictionary):
@@ -12,36 +18,29 @@ def shuffle_dict(dictionary):
     return OrderedDict([(key, dictionary[key]) for key in keys])
 
 
-def fetch_random_question_path():
+def fetch_random_question_path(questions_dir):
     if not questions_path:
-        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        QUESTIONS_DIR = os.path.join(BASE_DIR, 'quiz-bot', 'quiz-questions')
-
-        for root, dirs, files in os.walk(QUESTIONS_DIR):
+        for root, dirs, files in os.walk(questions_dir):
             for filename in files:
                 questions_path.append(os.path.join(root, filename))
+        random.shuffle(questions_path)
     return questions_path.pop()
 
 
-quiz_questions = OrderedDict()
-shuffle_questions = {}
-random_questions = {}
-
-
-def fetch_random_questions():
+def fetch_random_questions(questions_dir):
     global random_questions
     if random_questions:
         return random_questions.popitem()
     if not quiz_questions:
-        question_path = fetch_random_question_path()
+        question_path = fetch_random_question_path(questions_dir)
         with open(question_path, "r", encoding="KOI8-R") as my_file:
             file_contents = my_file.read()
-        quiz_questionss = file_contents.split('\n\n')
-        for key, quiz_question in enumerate(quiz_questionss):
+        questions = file_contents.split('\n\n')
+        for key, quiz_question in enumerate(questions):
             if 'Вопрос' in quiz_question:
-                question = quiz_questionss[key]
+                question = questions[key]
                 try:
-                    answer = quiz_questionss[key + 1]
+                    answer = questions[key + 1]
                 except IndexError:
                     continue
                 quiz_questions[question] = answer
@@ -49,9 +48,9 @@ def fetch_random_questions():
         global shuffle_questions
         if not shuffle_questions:
             shuffle_questions = shuffle_dict(quiz_questions)
-        print(f'quiz_ques_count ->> {len(shuffle_questions)}')
+        logger.info(f'quiz_ques_count ->> {len(shuffle_questions)}')
         five_random_questions = shuffle_questions.popitem()
-        print(f'quiz_ques ->> {five_random_questions}')
+        logger.info(f'quiz_ques ->> {five_random_questions}')
         if '\n   ' in five_random_questions:
             questions = five_random_questions[0].split('\n   ')[1:]
             answers = five_random_questions[1].split('\n   ')[1:]
