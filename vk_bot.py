@@ -35,8 +35,8 @@ def start(event, vk_api, keyboard):
 
 def ask_question(event, vk_api, keyboard, redis_client):
     user_id = event.user_id
-
-    quiz_question = fetch_random_questions()
+    questions_dir = os.getenv('QUESTIONS_DIR')
+    quiz_question = fetch_random_questions(questions_dir)
     question = re.sub(r'Вопрос \d+:\s+', '', quiz_question[0])
     answer = re.sub(r'Ответ:\s+', '', quiz_question[1])
 
@@ -143,6 +143,7 @@ if __name__ == "__main__":
 
     exception_logger.setLevel(logging.ERROR)
     exception_logger.addHandler(TelegramLogsHandler(api_tg_token, chat_id))
+    logger.info(f'ВК бот запущен.')
 
     with redis.Redis(
             host=os.getenv("REDIS_HOST"),
