@@ -6,6 +6,7 @@ import logging
 
 from main import fetch_random_questions
 from dotenv import load_dotenv
+from time import sleep
 import vk_api as vk
 from logs_handler import TelegramLogsHandler
 from vk_api.longpoll import VkLongPoll, VkEventType
@@ -43,7 +44,7 @@ def ask_question(event, vk_api, keyboard, redis_client):
 
     question = json.loads(redis_client.get(f'{user_id}_question'))
 
-    logger.info(f'question--->{question}, answer--->{answer}')
+    logger.info(f'question--->{question}, \nanswer--->{answer}')
 
     question_text = f'Внимание вопрос: \n\n{question}'
 
@@ -126,7 +127,10 @@ def main(event, vk_api, redis_client):
 
 if __name__ == "__main__":
     load_dotenv()
+    TIMEOUT = 120
     vk_session = vk.VkApi(token=os.getenv("VK_API_TOKEN"))
+    chat_id = os.getenv('TG_CHAT_ID')
+    api_tg_token = os.getenv('TG_API_BOT')
 
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
@@ -144,6 +148,11 @@ if __name__ == "__main__":
             db=0,
             password=os.getenv("REDIS_PASSWORD")
     ) as redis_client:
-        for event in longpoll.listen():
-            if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-                main(event, vk_api, redis_client)
+        while True:
+            try:
+                for event in longpoll.listen():
+                    if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+                        main(event, vk_api, redis_client)
+            except Exception:
+                exception_logger.exception("Бот упал с ошибкой")
+                sleep(TIMEOUT)
