@@ -59,7 +59,7 @@ def ask_question(event, vk_api, keyboard, redis_client):
 
 def check_answer(event, vk_api, keyboard, redis_client):
     user_id = event.user_id
-    answer = json.loads(redis_client.get(f'{chat_id}_answer')).split('.')[0]
+    answer = json.loads(redis_client.get(f'{user_id}_answer')).split('.')[0]
     lower_answer = answer.lower()
 
     if event.text.lower() == lower_answer:
@@ -107,7 +107,7 @@ def check_score(event, vk_api, keyboard, redis_client):
     )
 
 
-def main(event, vk_api, redis_client):
+def handle_user_input(event, vk_api, redis_client):
     keyboard = VkKeyboard(one_time=True)
 
     keyboard.add_button('Новый вопрос ❔', color=VkKeyboardColor.POSITIVE)
@@ -127,7 +127,7 @@ def main(event, vk_api, redis_client):
         check_answer(event, vk_api, keyboard, redis_client)
 
 
-if __name__ == "__main__":
+def main() -> None:
     load_dotenv()
     TIMEOUT = 120
     vk_session = vk.VkApi(token=os.getenv("VK_API_TOKEN"))
@@ -155,7 +155,11 @@ if __name__ == "__main__":
             try:
                 for event in longpoll.listen():
                     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-                        main(event, vk_api, redis_client)
+                        handle_user_input(event, vk_api, redis_client)
             except Exception:
                 exception_logger.exception("Бот упал с ошибкой")
                 sleep(TIMEOUT)
+
+
+if __name__ == "__main__":
+    main()
