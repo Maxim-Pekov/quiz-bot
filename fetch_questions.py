@@ -18,8 +18,8 @@ def shuffle_dict(dictionary):
 
 def fetch_random_question_path(dir):
     global questions_path
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    questions_dir = os.path.join(BASE_DIR, 'quiz-bot', dir)
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    questions_dir = os.path.join(base_dir, 'quiz-bot', dir)
     if not questions_path:
         for root, dirs, files in os.walk(questions_dir):
             for filename in files:
