@@ -26,8 +26,8 @@ def fetch_random_questions(questions_dir):
     if not quiz_questions:
         question_path = fetch_random_question_path(questions_dir)
         logger.info(f'question_path ->> {question_path}')
-        with open(question_path, "r", encoding="KOI8-R") as my_file:
-            file_contents = my_file.read()
+        with open(question_path, "r", encoding="KOI8-R") as file:
+            file_contents = file.read()
         questions = file_contents.split('\n\n')
         for key, quiz_question in enumerate(questions):
             if 'Вопрос' in quiz_question:
