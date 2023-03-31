@@ -10,12 +10,6 @@ quiz_questions = []
 logger = logging.getLogger(__name__)
 
 
-def shuffle_dict(dictionary):
-    keys = list(dictionary.keys())
-    random.shuffle(keys)
-    return OrderedDict([(key, dictionary[key]) for key in keys])
-
-
 def fetch_random_question_path(dir):
     global questions_path
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
