@@ -33,9 +33,8 @@ def start(event, vk_api, keyboard):
     )
 
 
-def ask_question(event, vk_api, keyboard, redis_client):
+def ask_question(event, vk_api, keyboard, redis_client, questions_dir):
     user_id = event.user_id
-    questions_dir = os.getenv('QUESTIONS_DIR')
     quiz_question = fetch_random_questions(questions_dir)
     question = re.sub(r'Вопрос \d+:\s+', '', quiz_question[0])
     answer = re.sub(r'Ответ:\s+', '', quiz_question[1])
@@ -81,7 +80,7 @@ def check_answer(event, vk_api, keyboard, redis_client):
     )
 
 
-def show_answer(event, vk_api, keyboard, redis_client):
+def show_answer(event, vk_api, keyboard, redis_client, questions_dir):
     user_id = event.user_id
     answer = json.loads(redis_client.get(f'{user_id}_answer'))
     bot_answer = f"Правильный ответ \n\n{answer}\n\n"
@@ -91,7 +90,7 @@ def show_answer(event, vk_api, keyboard, redis_client):
         keyboard=keyboard.get_keyboard(),
         random_id=random.randint(1, 1000)
     )
-    ask_question(event, vk_api, keyboard, redis_client)
+    ask_question(event, vk_api, keyboard, redis_client, questions_dir)
 
 
 def check_score(event, vk_api, keyboard, redis_client):
@@ -107,7 +106,7 @@ def check_score(event, vk_api, keyboard, redis_client):
     )
 
 
-def handle_user_input(event, vk_api, redis_client):
+def handle_user_input(event, vk_api, redis_client, questions_dir):
     keyboard = VkKeyboard(one_time=True)
 
     keyboard.add_button('Новый вопрос ❔', color=VkKeyboardColor.POSITIVE)
@@ -116,11 +115,11 @@ def handle_user_input(event, vk_api, redis_client):
     keyboard.add_button('Мой счет ✍️', color=VkKeyboardColor.PRIMARY)
 
     if event.text == 'Новый вопрос ❔':
-        ask_question(event, vk_api, keyboard, redis_client)
+        ask_question(event, vk_api, keyboard, redis_client, questions_dir)
     elif event.text == 'Старт':
         start(event, vk_api, keyboard)
     elif event.text == 'Сдаться ❌':
-        show_answer(event, vk_api, keyboard, redis_client)
+        show_answer(event, vk_api, keyboard, redis_client, questions_dir)
     elif event.text == 'Мой счет ✍️':
         check_score(event, vk_api, keyboard, redis_client)
     else:
@@ -133,6 +132,7 @@ def main() -> None:
     vk_session = vk.VkApi(token=os.getenv("VK_API_TOKEN"))
     chat_id = os.getenv('TG_CHAT_ID')
     api_tg_token = os.getenv('TG_API_BOT')
+    questions_dir = os.getenv('QUESTIONS_DIR')
 
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
@@ -155,7 +155,9 @@ def main() -> None:
             try:
                 for event in longpoll.listen():
                     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-                        handle_user_input(event, vk_api, redis_client)
+                        handle_user_input(
+                            event, vk_api, redis_client, questions_dir
+                        )
             except Exception:
                 exception_logger.exception("Бот упал с ошибкой")
                 sleep(TIMEOUT)

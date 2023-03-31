@@ -41,13 +41,12 @@ def start(update: Update, context: CallbackContext) -> None:
     return QUESTIONS
 
 
-def ask_question(update: Update, context: CallbackContext, redis_client):
-    questions_dir = os.getenv('QUESTIONS_DIR')
+def ask_question(update: Update, context: CallbackContext, redis_client, questions_dir):
+
     quiz_question = fetch_random_questions(questions_dir)
 
     question = re.sub(r'Вопрос \d+:\s+', '', quiz_question[0])
     answer = re.sub(r'Ответ:\s+', '', quiz_question[1])
-
     chat_id = update.effective_message.chat_id
 
     redis_client.set(f'{chat_id}_question', json.dumps(question))
@@ -93,14 +92,14 @@ def check_answer(update: Update, context: CallbackContext, redis_client):
     return ANSWERS
 
 
-def show_answer(update: Update, context: CallbackContext, redis_client):
+def show_answer(update: Update, context: CallbackContext, redis_client, questions_dir):
     score = context.user_data["score"]
     chat_id = update.effective_message.chat_id
     answer = json.loads(redis_client.get(f'{chat_id}_answer'))
     bot_answer = f'Правильный ответ \n\n{answer},\n\nВаш счет текущей партии' \
                  f' {score} балл(а/ов)'
     update.message.reply_text(bot_answer)
-    ask_question(update, context, redis_client)
+    ask_question(update, context, redis_client, questions_dir)
 
 
 def check_score(update: Update, context: CallbackContext, redis_client):
@@ -134,6 +133,7 @@ def main() -> None:
     TIMEOUT = 120
     chat_id = os.getenv('TG_CHAT_ID')
     api_tg_token = os.getenv("TG_API_BOT")
+    questions_dir = os.getenv('QUESTIONS_DIR')
 
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - '
                                '%(message)s', datefmt='%d-%m-%Y %I:%M:%S %p',
@@ -149,9 +149,17 @@ def main() -> None:
             password=os.getenv("REDIS_PASSWORD")
     ) as redis_client:
 
-        question = partial(ask_question, redis_client=redis_client)
+        question = partial(
+            ask_question,
+            redis_client=redis_client,
+            questions_dir=questions_dir
+        )
         answer = partial(check_answer, redis_client=redis_client)
-        fail = partial(show_answer, redis_client=redis_client)
+        fail = partial(
+            show_answer,
+            redis_client=redis_client,
+            questions_dir=questions_dir
+        )
         score = partial(check_score, redis_client=redis_client)
 
         while True:
