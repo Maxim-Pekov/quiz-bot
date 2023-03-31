@@ -10,10 +10,11 @@ quiz_questions = []
 logger = logging.getLogger(__name__)
 
 
-def fetch_random_question_path(dir):
+def fetch_random_question_path(questions_dir):
     global questions_path
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    questions_dir = os.path.join(base_dir, 'quiz-bot', dir)
+    if not questions_dir:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        questions_dir = os.path.join(base_dir, 'quiz-bot', 'quiz-questions')
     if not questions_path:
         for root, dirs, files in os.walk(questions_dir):
             for filename in files:

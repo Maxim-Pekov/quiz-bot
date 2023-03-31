@@ -83,7 +83,7 @@ TG_CHAT_ID='7477755261'
 REDIS_PASSWORD=AEA7B5sfkJ0MzcuQiDdDf464gsh48hs6
 REDIS_HOST=redis-18156.c12.us-east-1-5.ec2.cloud.redislabs.com
 REDIS_PORT=18882
-QUESTIONS_DIR=quiz-questions
+QUESTIONS_DIR=/home/user/quiz-questions
 ```
 
 
