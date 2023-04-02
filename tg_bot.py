@@ -1,14 +1,14 @@
 import json
 import logging
 import os
-import re
+import random
 import redis
 
 from functools import partial
 from time import sleep
 from dotenv import load_dotenv
 from logs_handler import TelegramLogsHandler
-from fetch_questions import fetch_random_questions
+from fetch_questions import fetch_questions
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram import Update
@@ -41,20 +41,16 @@ def start(update: Update, context: CallbackContext) -> None:
     return QUESTIONS
 
 
-def ask_question(update: Update, context: CallbackContext, redis_client, questions_dir):
+def ask_question(update: Update, context: CallbackContext, redis_client, quiz_questions):
+    quiz_question = random.choice(quiz_questions)
 
-    quiz_question = fetch_random_questions(questions_dir)
-
-    question = re.sub(r'Вопрос \d+:\s+', '', quiz_question[0])
-    answer = re.sub(r'Ответ:\s+', '', quiz_question[1])
     chat_id = update.effective_message.chat_id
 
-    redis_client.set(f'{chat_id}_question', json.dumps(question))
-    redis_client.set(f'{chat_id}_answer', json.dumps(answer))
+    redis_client.set(f'{chat_id}_question', json.dumps(quiz_question))
 
-    logger.info(f'question--->{question}, \nanswer--->{answer}')
+    logger.info(f'question--->{quiz_question[0]}, \nanswer--->{quiz_question[1]}')
 
-    bot_answer = f'Внимание вопрос: \n\n{question}'
+    bot_answer = f'Внимание вопрос: \n\n{quiz_question[0]}'
 
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
@@ -70,7 +66,7 @@ def ask_question(update: Update, context: CallbackContext, redis_client, questio
 def check_answer(update: Update, context: CallbackContext, redis_client):
     chat_id = update.effective_message.chat_id
     user_answer = update.effective_message.text.lower()
-    answer = json.loads(redis_client.get(f'{chat_id}_answer')).split('.')[0]
+    answer = json.loads(redis_client.get(f'{chat_id}_question'))[1]
     lower_answer = answer.lower()
     if user_answer == lower_answer:
         context.user_data["score"] += 1
@@ -92,14 +88,14 @@ def check_answer(update: Update, context: CallbackContext, redis_client):
     return ANSWERS
 
 
-def show_answer(update: Update, context: CallbackContext, redis_client, questions_dir):
+def show_answer(update: Update, context: CallbackContext, redis_client, quiz_questions):
     score = context.user_data["score"]
     chat_id = update.effective_message.chat_id
-    answer = json.loads(redis_client.get(f'{chat_id}_answer'))
+    answer = json.loads(redis_client.get(f'{chat_id}_question'))[1]
     bot_answer = f'Правильный ответ \n\n{answer},\n\nВаш счет текущей партии' \
                  f' {score} балл(а/ов)'
     update.message.reply_text(bot_answer)
-    ask_question(update, context, redis_client, questions_dir)
+    ask_question(update, context, redis_client, quiz_questions)
 
 
 def check_score(update: Update, context: CallbackContext, redis_client):
@@ -139,6 +135,7 @@ def main() -> None:
                                '%(message)s', datefmt='%d-%m-%Y %I:%M:%S %p',
                         level=logging.INFO)
 
+    quiz_questions = fetch_questions(questions_dir)
     exception_logger.setLevel(logging.ERROR)
     exception_logger.addHandler(TelegramLogsHandler(api_tg_token, chat_id))
 
@@ -152,13 +149,13 @@ def main() -> None:
         question = partial(
             ask_question,
             redis_client=redis_client,
-            questions_dir=questions_dir
+            quiz_questions=quiz_questions
         )
         answer = partial(check_answer, redis_client=redis_client)
         fail = partial(
             show_answer,
             redis_client=redis_client,
-            questions_dir=questions_dir
+            quiz_questions=quiz_questions
         )
         score = partial(check_score, redis_client=redis_client)
 
