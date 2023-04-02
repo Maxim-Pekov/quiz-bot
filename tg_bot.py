@@ -126,7 +126,6 @@ def cancel(update: Update, context: CallbackContext):
 def main() -> None:
     """Start the bot."""
     load_dotenv()
-    TIMEOUT = 120
     chat_id = os.getenv('TG_CHAT_ID')
     api_tg_token = os.getenv("TG_API_BOT")
     questions_dir = os.getenv('QUESTIONS_DIR')
@@ -159,39 +158,34 @@ def main() -> None:
         )
         score = partial(check_score, redis_client=redis_client)
 
-        while True:
-            try:
-                updater = Updater(api_tg_token)
-                conv_handler = ConversationHandler(
-                    entry_points=[CommandHandler("start", start)],
-                    states={
-                        QUESTIONS: [
-                            MessageHandler(
-                                Filters.text("Новый вопрос ❔"), question
-                            ),
-                            MessageHandler(Filters.text("Мой счет ✍️"), score),
-                        ],
-                        ANSWERS: [
-                            MessageHandler(
-                                Filters.text("Новый вопрос ❔"), question
-                            ),
-                            MessageHandler(Filters.text("Сдаться ❌"), fail),
-                            MessageHandler(Filters.text("Мой счет ✍️"), score),
-                            MessageHandler(
-                                Filters.text & ~Filters.command, answer
-                            )
-                        ],
-                    },
-                    fallbacks=[CommandHandler('cancel', cancel)],
-                )
+        updater = Updater(api_tg_token)
+        conv_handler = ConversationHandler(
+            entry_points=[CommandHandler("start", start)],
+            states={
+                QUESTIONS: [
+                    MessageHandler(
+                        Filters.text("Новый вопрос ❔"), question
+                    ),
+                    MessageHandler(Filters.text("Мой счет ✍️"), score),
+                ],
+                ANSWERS: [
+                    MessageHandler(
+                        Filters.text("Новый вопрос ❔"), question
+                    ),
+                    MessageHandler(Filters.text("Сдаться ❌"), fail),
+                    MessageHandler(Filters.text("Мой счет ✍️"), score),
+                    MessageHandler(
+                        Filters.text & ~Filters.command, answer
+                    )
+                ],
+            },
+            fallbacks=[CommandHandler('cancel', cancel)],
+        )
 
-                dispatcher = updater.dispatcher
-                dispatcher.add_handler(conv_handler)
-                updater.start_polling()
-                updater.idle()
-            except Exception:
-                exception_logger.exception("Бот упал с ошибкой")
-                sleep(TIMEOUT)
+        dispatcher = updater.dispatcher
+        dispatcher.add_handler(conv_handler)
+        updater.start_polling()
+        updater.idle()
 
 
 if __name__ == '__main__':
