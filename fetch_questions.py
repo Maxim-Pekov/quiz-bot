@@ -1,4 +1,5 @@
 import os
+import random
 import re
 import logging
 
@@ -33,3 +34,30 @@ def fetch_questions(questions_dir):
                     continue
                 questions.append((question, answer[:-1]))
     return questions
+
+
+def get_invisible_answer(answer, characters=None) -> str:
+    answer_words = answer.split()
+    invisible_answer = []
+    for word in answer_words:
+        word_length = len(word)
+        if characters == '&':
+            characters = list(set(answer.replace(' ', '')))
+            random.shuffle(characters)
+            try:
+                characters.pop()
+            except ValueError:
+                pass
+
+
+        if characters:
+            invisible_word = []
+            for letter in word:
+                if letter in characters:
+                    invisible_word.append(letter)
+                else:
+                    invisible_word.append('_')
+            invisible_answer.append(''.join(invisible_word))
+        else:
+            invisible_answer.append('_' * word_length)
+    return ' '.join(invisible_answer)

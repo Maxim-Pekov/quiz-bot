@@ -8,7 +8,7 @@ from functools import partial
 from time import sleep
 from dotenv import load_dotenv
 from logs_handler import TelegramLogsHandler
-from fetch_questions import fetch_questions
+from fetch_questions import fetch_questions, get_invisible_answer
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram import Update
@@ -50,7 +50,9 @@ def ask_question(update: Update, context: CallbackContext, redis_client, quiz_qu
 
     logger.info(f'question--->{quiz_question[0]}, \nanswer--->{quiz_question[1]}')
 
-    bot_answer = f'Внимание вопрос: \n\n{quiz_question[0]}'
+    invisible_answer = get_invisible_answer(quiz_question[1])
+    bot_message = f'Внимание вопрос: \n\n{quiz_question[0]}\n\n ' \
+                  f'Ответ: {invisible_answer}'
 
     message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
                         ['Мой счет ✍️']]
@@ -59,7 +61,33 @@ def ask_question(update: Update, context: CallbackContext, redis_client, quiz_qu
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(bot_answer, reply_markup=markup)
+    update.message.reply_text(bot_message, reply_markup=markup)
+    return ANSWERS
+
+
+def show_clue(update: Update, context: CallbackContext, redis_client):
+    chat_id = update.effective_message.chat_id
+
+    quiz_question = json.loads(redis_client.get(f'{chat_id}_question'))
+
+    logger.info(f'question--->{quiz_question[0]}, \nanswer--->{quiz_question[1]}')
+
+    invisible_answer = get_invisible_answer(quiz_question[1],
+                                            redis_client,
+                                            chat_id,
+                                            random_character=True)
+    # redis_client.set(f'{chat_id}_clue', json.dumps(characters))
+    bot_message = f'Внимание вопрос: \n\n{quiz_question[0]}\n\n ' \
+                  f'Ответ: {invisible_answer}'
+
+    message_keyboard = [["Новый вопрос ❔", "Сдаться ❌"],
+                        ['Мой счет ✍️']]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(bot_message, reply_markup=markup)
     return ANSWERS
 
 
@@ -70,6 +98,7 @@ def check_answer(update: Update, context: CallbackContext, redis_client):
     lower_answer = answer.lower()
     if user_answer == lower_answer:
         context.user_data["score"] += 1
+
         total_score = json.loads(redis_client.get(f'{chat_id}_score'))
         redis_client.set(f'{chat_id}_score', total_score + 1)
         bot_answer = 'Правильно! Поздравляю! ' \
@@ -101,6 +130,8 @@ def show_answer(update: Update, context: CallbackContext, redis_client, quiz_que
 def check_score(update: Update, context: CallbackContext, redis_client):
     chat_id = update.effective_message.chat_id
     score = context.user_data["score"]
+    if redis_client.get(f'{chat_id}_score') == None:
+        redis_client.set(f'{chat_id}_score', 0)
     total_score = json.loads(redis_client.get(f'{chat_id}_score'))
     bot_answer = f"Ваш счет текущей партии {score} балл(а/ов) \n\n" \
                  f"Ваш общий итоговый счет {total_score} балл(а/ов)"
@@ -142,7 +173,6 @@ def main() -> None:
             host=os.getenv("REDIS_HOST"),
             port=os.getenv("REDIS_PORT"),
             db=0,
-            password=os.getenv("REDIS_PASSWORD")
     ) as redis_client:
 
         question = partial(
@@ -157,6 +187,7 @@ def main() -> None:
             quiz_questions=quiz_questions
         )
         score = partial(check_score, redis_client=redis_client)
+        clue = partial(show_clue, redis_client=redis_client)
 
         updater = Updater(api_tg_token)
         conv_handler = ConversationHandler(
@@ -174,6 +205,7 @@ def main() -> None:
                     ),
                     MessageHandler(Filters.text("Сдаться ❌"), fail),
                     MessageHandler(Filters.text("Мой счет ✍️"), score),
+                    MessageHandler(Filters.text("Подсказка"), clue),
                     MessageHandler(
                         Filters.text & ~Filters.command, answer
                     )
